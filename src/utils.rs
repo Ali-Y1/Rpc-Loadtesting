@@ -64,6 +64,8 @@ pub struct Cli {
     pub request_file: PathBuf,
     #[structopt(short = "d", long = "duration", default_value = "30", help = "Test duration in seconds (ignored if requests_per_connection is set)")]
     pub test_duration: u64,
+    #[structopt(short = "o",long = "output",default_value = "results.csv",help = "Output filename for the results (CSV format)")]
+    pub output_filename: String,
 }
 
 pub async fn read_json_request_from_file(file_path: &PathBuf) -> Result<JsonRequest, Box<dyn Error>> {

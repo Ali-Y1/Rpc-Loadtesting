@@ -62,7 +62,7 @@ Replace [OPTIONS] with the appropriate command-line options for your test. Avail
 - `-r, --requests`: Number of requests per connection (0 for time-based test, default: 0)
 - `-s, --step`: Connection step size for testing with varying connection counts (default: 0)
 - `-f, --file`: Path to the file containing the JSON-RPC request (required)
-- `-d, --duration`: Test duration in seconds (ignored if `--
+- `-d, --duration`: Test duration in seconds 
 3. Analyze the results displayed in the terminal and exported to the results.csv file.
 ## 📜 License
 This project is licensed under the MIT License.

@@ -87,7 +87,7 @@ pub async fn run() {
             let handle = tokio::spawn(async move {
                 let mut request_count = 0;
                 let test_start_time = Instant::now();
-                while (args.test_duration == 0 || Instant::now().duration_since(test_start_time) < Duration::from_secs(args.test_duration))
+                while (test_duration == 0 || Instant::now().duration_since(test_start_time) < Duration::from_secs(test_duration))
                     && (args.requests_per_connection == 0 || request_count < args.requests_per_connection)
                 {
                     let request = json_request_clone.clone();
@@ -175,7 +175,7 @@ pub async fn run() {
         }
     }
      // Export the results to a CSV file
-     let file_path = "results.csv";
+     let file_path = &args.output_filename;
      let mut wtr = csv::Writer::from_path(file_path).unwrap();
  
      // Write headers
