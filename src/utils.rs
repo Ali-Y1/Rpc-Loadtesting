@@ -74,7 +74,7 @@ pub struct Cli {
 pub async fn read_json_request_from_file(file_path: &PathBuf) -> Result<JsonRequest, Box<dyn Error>> {
     let contents = fs::read_to_string(file_path)?;
     let json_request: JsonRequest = serde_json::from_str(&contents)?;
-    info!("Read JSON request from file: {:?}", json_request);
+    debug!("Read JSON request from file: {:?}", json_request);
     Ok(json_request)
 }
 
@@ -89,12 +89,10 @@ pub async fn send_json_rpc_request(
         .send()
         .await?;
     debug!("Received response: {:?}", response);
-    if response.content_length().unwrap_or_else(||1000) < 1000{
-        warn!("No logs in the response");
-        return Err("No logs".into());
-    }
-
     if response.status().is_success() {
+        if response.content_length().unwrap_or_else(||1000) < 1000{
+            return Err(format!("{:?}",response).into());
+        }
         let json_response: JsonResponse = response.json().await?;
         debug!("Parsed JSON-RPC response: {:?}", json_response);
         Ok(json_response)
@@ -102,6 +100,9 @@ pub async fn send_json_rpc_request(
         error!("HTTP error: {}", response.status());
         Err(format!("HTTP error: {}", response.status()).into())
     }
+    
+
+   
 }
 
 pub async fn export_to_csv(filename: &str, headers: &[&str], records: &[Vec<String>]) -> Result<(), Box<dyn Error>> {
