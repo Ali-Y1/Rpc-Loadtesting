@@ -14,6 +14,8 @@ use std::sync::{Arc, Mutex};
 use std::time::Instant;
 use std::sync::atomic::{AtomicU64, Ordering, AtomicBool};
 use tokio::time::{timeout, Duration};
+use log::{debug, info, error};
+use chrono::prelude::*;
 use crate::utils::*;
 
 pub mod utils;
@@ -25,12 +27,17 @@ pub async fn run() {
     let max_connections = args.concurrent_connections;
     let connections_step = args.connections_step;
     let request_file = &args.request_file;
+    let start_time = Utc::now();
+    info!("Started test at {}", start_time);
 
     // Read the JSON request from the file
     let json_request = match read_json_request_from_file(request_file).await {
-        Ok(req) => req,
+        Ok(req) => {
+        info!("Successfully read JSON request from file");
+        req
+    },
         Err(e) => {
-            eprintln!("Error reading JSON request from file: {}", e);
+            error!("Error reading JSON request from file: {}", e);
             return;
         }
     };
@@ -70,7 +77,7 @@ pub async fn run() {
                 _ = sigint.recv() => {},
                 _ = sigterm.recv() => {},
             }
-            println!("Received kill signal, shutting down...");
+            info!("Kill signal received, shutting down");
             stop_flag_clone.store(true, Ordering::SeqCst);
         });
 
@@ -111,9 +118,11 @@ pub async fn run() {
                         Ok(_) => {
                             stats.successful_requests += 1;
                             stats.total_response_time += elapsed_time;
+                            debug!("Request succeeded, response time: {} ms", elapsed_time);
                         }
-                        Err(_) => {
+                        Err(e) => {
                             stats.failed_requests += 1;
+                            error!("Request failed with error: {}", e);
                         }
                     }
                     request_count += 1;
@@ -130,14 +139,15 @@ pub async fn run() {
         }
 
         tokio::select! {
-            _ = signal_handler => {},
-            _ = future::join_all(handles) => {},
+            _ = signal_handler => { info!("Signal handler completed");},
+            _ = future::join_all(handles) => { info!("All connection tasks completed");},
         }
 
         let elapsed_time = start_time.elapsed();
         let elapsed_seconds = elapsed_time.as_secs_f64();
 
         // Display the results
+        
         let stats = stats.lock().unwrap();
         let total_requests = stats.completed_requests.load(Ordering::Relaxed);
         let average_response_time = if total_requests > 0 {
@@ -145,6 +155,9 @@ pub async fn run() {
         } else {
             0
         };
+        // TODO: make the avg req calculation more accurate
+        //let average_requests_per_second = stats.successful_requests as f64 / elapsed_seconds;
+
         let average_requests_per_second = total_requests as f64 / elapsed_seconds;
 
         println!("\n{:=^50}", format!(" Results for {} Connections ", connections));
@@ -189,5 +202,5 @@ pub async fn run() {
      // Flush the writer to ensure all data is written to the file
      wtr.flush().unwrap();
  
-     println!("Results have been exported to {}", file_path);
+     info!("Results exported to {}", file_path);
  }

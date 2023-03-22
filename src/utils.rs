@@ -3,6 +3,7 @@ use futures::future;
 use jsonrpc_core::IoHandler;
 use jsonrpc_http_server::{AccessControlAllowOrigin, DomainsValidation, ServerBuilder};
 use jsonrpc_derive::rpc;
+use log::{debug, warn, error, info};
 use serde::{Deserialize, Serialize};
 use structopt::StructOpt;
 use serde_json::{Map, Value};
@@ -66,11 +67,14 @@ pub struct Cli {
     pub test_duration: u64,
     #[structopt(short = "o",long = "output",default_value = "results.csv",help = "Output filename for the results (CSV format)")]
     pub output_filename: String,
+    #[structopt(short = "v", long = "verbose", parse(from_occurrences), help = "Increase output verbosity")]
+    pub verbosity: u8,
 }
 
 pub async fn read_json_request_from_file(file_path: &PathBuf) -> Result<JsonRequest, Box<dyn Error>> {
     let contents = fs::read_to_string(file_path)?;
     let json_request: JsonRequest = serde_json::from_str(&contents)?;
+    info!("Read JSON request from file: {:?}", json_request);
     Ok(json_request)
 }
 
@@ -79,32 +83,38 @@ pub async fn send_json_rpc_request(
     server_url: &str,
     request: &JsonRequest,
 ) -> Result<JsonResponse, Box<dyn Error>> {
+    debug!("Sending JSON-RPC request: {:?}", request);
     let response = client.post(server_url)
         .json(request)
         .send()
         .await?;
+    debug!("Received response: {:?}", response);
     if response.content_length().unwrap_or_else(||1000) < 1000{
+        warn!("No logs in the response");
         return Err("No logs".into());
     }
 
     if response.status().is_success() {
         let json_response: JsonResponse = response.json().await?;
+        debug!("Parsed JSON-RPC response: {:?}", json_response);
         Ok(json_response)
     } else {
+        error!("HTTP error: {}", response.status());
         Err(format!("HTTP error: {}", response.status()).into())
     }
 }
 
 pub async fn export_to_csv(filename: &str, headers: &[&str], records: &[Vec<String>]) -> Result<(), Box<dyn Error>> {
+    info!("Exporting results to CSV file: {}", filename);
     let file = File::create(filename)?;
     let mut writer = Writer::from_writer(file);
-
+    info!("Writing headers to the CSV file");
     writer.write_record(headers)?;
-
+    info!("Writing records to the CSV file");
     for record in records {
         writer.write_record(record)?;
     }
-
+    info!("Flushing the writer and finalizing the CSV file");
     writer.flush()?;
     Ok(())
 }
