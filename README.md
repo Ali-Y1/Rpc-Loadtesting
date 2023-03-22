@@ -52,20 +52,17 @@ cargo build --release
 ```
 2. Run the load testing tool with the required arguments:
 ```
-./target/release/load_testing_tool \
-    --server-url http://your-json-rpc-server-url.com \
-    --concurrent-connections 100 \
-    --connections-step 10 \
-    --requests-per-connection 1000 \
-    --timeout 5000 \
-    --json-file path/to/your/json/file.json
+./target/release/json_rpc_load_tester [OPTIONS]
 ```
-- `--server-url`: The URL of the JSON-RPC server to test.
-- `--concurrent-connections`: The maximum number of concurrent connections to test.
-- `--connections-step`: The step size for increasing the number of concurrent connections in each iteration.
-- `--requests-per-connection`: The number of requests to send per connection.
-- `--timeout`: The request timeout duration in milliseconds.
-- `--json-file`: The path to the JSON file containing the JSON-RPC request body.
+Replace [OPTIONS] with the appropriate command-line options for your test. Available options include:
+
+- `-t, --timeout`: Request timeout in milliseconds (default: 15000)
+- `-u, --url`: URL of the JSON-RPC server to test (required)
+- `-c, --connections`: Number of concurrent connections to establish (required)
+- `-r, --requests`: Number of requests per connection (0 for time-based test, default: 0)
+- `-s, --step`: Connection step size for testing with varying connection counts (default: 0)
+- `-f, --file`: Path to the file containing the JSON-RPC request (required)
+- `-d, --duration`: Test duration in seconds (ignored if `--
 3. Analyze the results displayed in the terminal and exported to the results.csv file.
 ## 📜 License
 This project is licensed under the MIT License.
