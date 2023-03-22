@@ -78,17 +78,20 @@ pub async fn run() {
             let client = client.clone();
             let stats = stats.clone();
             let server_url = args.server_url.to_owned();
-            let requests_per_connection = args.requests_per_connection;
-            let stop_flag = stop_flag.clone();
+            let test_duration = args.test_duration;
+            let stop_flag_clone = stop_flag.clone();
             let json_request_clone = json_request.clone();
-            if stop_flag.load(Ordering::SeqCst) {
+            if stop_flag_clone.load(Ordering::SeqCst) {
                 break;
             }
-
             let handle = tokio::spawn(async move {
-                for _ in 0..requests_per_connection {
+                let mut request_count = 0;
+                let test_start_time = Instant::now();
+                while (args.test_duration == 0 || Instant::now().duration_since(test_start_time) < Duration::from_secs(args.test_duration))
+                    && (args.requests_per_connection == 0 || request_count < args.requests_per_connection)
+                {
                     let request = json_request_clone.clone();
-        
+
                     let start_time = Instant::now();
                     let result = match timeout(timeout_duration, send_json_rpc_request(&client, &server_url, &request)).await {
                         Ok(res) => res,
@@ -99,7 +102,6 @@ pub async fn run() {
                     
                             Err("Request timed out".into())
                         },
-    
                     };
                     let elapsed_time = start_time.elapsed().as_millis();
     
@@ -113,6 +115,10 @@ pub async fn run() {
                         Err(_) => {
                             stats.failed_requests += 1;
                         }
+                    }
+                    request_count += 1;
+                    if stop_flag_clone.load(Ordering::SeqCst) {
+                        break;
                     }
                 }
             });

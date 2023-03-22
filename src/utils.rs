@@ -50,20 +50,22 @@ pub struct Stats {
 
 #[derive(StructOpt)]
 pub struct Cli {
-    #[structopt(short = "t", long, default_value = "15000")]
+    #[structopt(short = "t", long = "timeout", default_value = "15000", help = "Request timeout in milliseconds")]
     pub timeout: u64,
-    #[structopt(short = "u", long)]
+    #[structopt(short = "u", long = "url", help = "URL of the JSON-RPC server to test")]
     pub server_url: String,
-    #[structopt(short = "c", long)]
+    #[structopt(short = "c", long = "connections", help = "Number of concurrent connections to establish")]
     pub concurrent_connections: u32,
-    #[structopt(short = "r", long)]
+    #[structopt(short = "r", long = "requests", default_value = "0", help = "Number of requests per connection (0 for time-based test)")]
     pub requests_per_connection: u32,
-    #[structopt(short = "i", long, default_value = "0")]
+    #[structopt(short = "s", long = "step", default_value = "0", help = "Connection step size for testing with varying connection counts")]
     pub connections_step: u32,
-    #[structopt(short = "f", long)]
+    #[structopt(short = "f", long = "file", help = "Path to the file containing the JSON-RPC request")]
     pub request_file: PathBuf,
-    
+    #[structopt(short = "d", long = "duration", default_value = "30", help = "Test duration in seconds (ignored if requests_per_connection is set)")]
+    pub test_duration: u64,
 }
+
 pub async fn read_json_request_from_file(file_path: &PathBuf) -> Result<JsonRequest, Box<dyn Error>> {
     let contents = fs::read_to_string(file_path)?;
     let json_request: JsonRequest = serde_json::from_str(&contents)?;
