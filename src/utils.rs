@@ -82,7 +82,7 @@ pub async fn send_json_rpc_request(
     client: &Client,
     server_url: &str,
     request: &JsonRequest,
-) -> Result<JsonResponse, Box<dyn Error>> {
+) -> Result<(), Box<dyn Error>> {
     debug!("Sending JSON-RPC request: {:?}", request);
     let response = client.post(server_url)
         .json(request)
@@ -91,13 +91,12 @@ pub async fn send_json_rpc_request(
     debug!("Received response: {:?}", response);
     if response.status().is_success() {
         if response.content_length().unwrap_or_else(||1000) < 1000{
-            return Err(format!("{:?}",response).into());
+            let json_response: JsonResponse = response.json().await?;
+            return Err(format!("{:?}",json_response).into());
         }
-        let json_response: JsonResponse = response.json().await?;
-        debug!("Parsed JSON-RPC response: {:?}", json_response);
-        Ok(json_response)
+        Ok(())
     } else {
-        error!("HTTP error: {}", response.status());
+
         Err(format!("HTTP error: {}", response.status()).into())
     }
     
