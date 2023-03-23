@@ -63,7 +63,7 @@ pub struct Cli {
     pub connections_step: u32,
     #[structopt(short = "f", long = "file", help = "Path to the file containing the JSON-RPC request")]
     pub request_file: PathBuf,
-    #[structopt(short = "d", long = "duration", default_value = "30", help = "Test duration in seconds (ignored if requests_per_connection is set)")]
+    #[structopt(short = "d", long = "duration", default_value = "0", help = "Test duration in seconds (ignored if requests_per_connection is set)")]
     pub test_duration: u64,
     #[structopt(short = "o",long = "output",default_value = "results.csv",help = "Output filename for the results (CSV format)")]
     pub output_filename: String,
