@@ -16,6 +16,7 @@ use std::sync::atomic::{AtomicU64, Ordering, AtomicBool};
 use tokio::time::{timeout, Duration};
 use log::{debug, info, error};
 use chrono::prelude::*;
+use indicatif::{ProgressBar, ProgressStyle};
 use crate::utils::*;
 
 pub mod utils;
@@ -69,6 +70,10 @@ pub async fn run() {
         // Set up a signal handler for SIGINT and SIGTERM
         let mut sigint = signal(SignalKind::interrupt()).unwrap();
         let mut sigterm = signal(SignalKind::terminate()).unwrap();
+        let progress_bar = ProgressBar::new(connections as u64 * args.requests_per_connection as u64);
+        progress_bar.set_style(ProgressStyle::default_bar()
+            .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} {msg}")
+            .progress_chars("##-"));
 
         // Spawn a separate task to handle signals
         let stop_flag_clone = stop_flag.clone();
@@ -82,6 +87,7 @@ pub async fn run() {
         });
 
         for _ in 0..connections {
+            let progress_bar = progress_bar.clone();
             let client = client.clone();
             let stats = stats.clone();
             let server_url = args.server_url.to_owned();
@@ -114,6 +120,7 @@ pub async fn run() {
     
                     let mut stats = stats.lock().unwrap();
                     stats.completed_requests.fetch_add(1, Ordering::Relaxed);
+                    progress_bar.inc(1);
                     match result {
                         Ok(_) => {
                             stats.successful_requests += 1;
@@ -140,9 +147,11 @@ pub async fn run() {
 
         tokio::select! {
             _ = signal_handler => { info!("Signal handler completed");},
-            _ = future::join_all(handles) => { info!("All connection tasks completed");},
+            _ = future::join_all(handles) => {
+                progress_bar.finish_with_message("Completed requests");
+                 info!("All connection tasks completed");},
         }
-
+        
         let elapsed_time = start_time.elapsed();
         let elapsed_seconds = elapsed_time.as_secs_f64();
 
@@ -186,7 +195,9 @@ pub async fn run() {
         if stop_flag.load(Ordering::SeqCst) {
             break;
         }
+        
     }
+    
      // Export the results to a CSV file
      let file_path = &args.output_filename;
      let mut wtr = csv::Writer::from_path(file_path).unwrap();
