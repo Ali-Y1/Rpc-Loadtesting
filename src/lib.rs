@@ -17,6 +17,7 @@ use tokio::time::{timeout, Duration};
 use log::{debug, info, error};
 use chrono::prelude::*;
 use indicatif::{ProgressBar, ProgressStyle};
+use std::collections::HashMap;
 use crate::utils::*;
 
 pub mod utils;
@@ -66,14 +67,14 @@ pub async fn run() {
         let start_time = Instant::now();
         let stop_flag = Arc::new(AtomicBool::new(false));
         let timeout_duration = Duration::from_millis(args.timeout);
-
+        let error_counts = Arc::new(Mutex::new(HashMap::new()));
         // Set up a signal handler for SIGINT and SIGTERM
         let mut sigint = signal(SignalKind::interrupt()).unwrap();
         let mut sigterm = signal(SignalKind::terminate()).unwrap();
         let progress_bar = ProgressBar::new(connections as u64 * args.requests_per_connection as u64);
         progress_bar.set_style(ProgressStyle::default_bar()
-            .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} {msg}")
-            .progress_chars("##-"));
+            .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} ({eta}) ({per_sec}) {msg}")
+            .progress_chars(" * "));
 
         // Spawn a separate task to handle signals
         let stop_flag_clone = stop_flag.clone();
@@ -85,7 +86,7 @@ pub async fn run() {
             info!("Kill signal received, shutting down");
             stop_flag_clone.store(true, Ordering::SeqCst);
         });
-
+        
         for _ in 0..connections {
             let progress_bar = progress_bar.clone();
             let client = client.clone();
@@ -94,9 +95,11 @@ pub async fn run() {
             let test_duration = args.test_duration;
             let stop_flag_clone = stop_flag.clone();
             let json_request_clone = json_request.clone();
+
             if stop_flag_clone.load(Ordering::SeqCst) {
                 break;
             }
+            let error_counts_clone = error_counts.clone();
             let handle = tokio::spawn(async move {
                 let mut request_count = 0;
                 let test_start_time = Instant::now();
@@ -129,9 +132,17 @@ pub async fn run() {
                         }
                         Err(e) => {
                             stats.failed_requests += 1;
+                            {
+                                let mut error_counts = error_counts_clone.lock().unwrap();
+                                let count = error_counts.entry(e.to_string()).or_insert(0);
+                                *count += 1;
+                                // progress_bar.println(format!("{}({})", e,count));
+                                //print!("{}({})", e,count);
+                            }
                             error!("Request failed with error: {}", e);
                         }
                     }
+                    
                     request_count += 1;
                     if stop_flag_clone.load(Ordering::SeqCst) {
                         break;
@@ -179,7 +190,11 @@ pub async fn run() {
         println!("{:<24}|{:>25.2} s", "Elapsed time", elapsed_seconds);
         println!("{:=<50}", "");
         
-        
+        println!("\nError counts:");
+        let error_counts = error_counts.lock().unwrap();
+        for (error, count) in error_counts.iter() {
+            println!("{}: {}", error, count);
+        }
 
         // Store the results
         records.push(vec![
