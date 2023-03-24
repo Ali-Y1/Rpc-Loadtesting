@@ -73,7 +73,7 @@ pub async fn run() {
         let mut sigterm = signal(SignalKind::terminate()).unwrap();
         let progress_bar = ProgressBar::new(connections as u64 * args.requests_per_connection as u64);
         progress_bar.set_style(ProgressStyle::default_bar()
-            .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} ({eta}) ({per_sec}) {msg}")
+            .template("[{elapsed_precise}] |{bar:40.cyan/blue}| {pos:>7}/{len:7} ({eta}) ({per_sec}) {msg}")
             .progress_chars(" * "));
 
         // Spawn a separate task to handle signals
