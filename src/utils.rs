@@ -16,7 +16,7 @@ use std::time::Instant;
 use std::sync::atomic::{AtomicU64, Ordering, AtomicBool};
 use tokio::time::{timeout, Duration};
 use std::path::PathBuf;
-use std::fs;
+use std::{fs, fmt};
 
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -78,6 +78,23 @@ pub async fn read_json_request_from_file(file_path: &PathBuf) -> Result<JsonRequ
     Ok(json_request)
 }
 
+#[derive(Debug)]
+enum CustomJsonRpcError {
+    HttpError(reqwest::StatusCode),
+    JsonRpcError(JsonResponse),
+}
+
+impl fmt::Display for CustomJsonRpcError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            CustomJsonRpcError::HttpError(status) => write!(f, "HTTP error: {}", status),
+            CustomJsonRpcError::JsonRpcError(response) => write!(f, "JSON-RPC error: {:?}", response),
+        }
+    }
+}
+
+impl Error for CustomJsonRpcError {}
+
 pub async fn send_json_rpc_request(
     client: &Client,
     server_url: &str,
@@ -88,22 +105,19 @@ pub async fn send_json_rpc_request(
         .json(request)
         .send()
         .await?;
-    debug!("Received response: {:?}", response);
+
     if response.status().is_success() {
-        if response.content_length().unwrap_or_else(||1000) < 1000{
+        let content_length = response.content_length().unwrap_or(1000);
+        if content_length < 1000 {
             let json_response: JsonResponse = response.json().await?;
-            return Err(format!("{:?}",json_response).into());
+            return Err(CustomJsonRpcError::JsonRpcError(json_response).into());
+            // return Ok(())
         }
         Ok(())
     } else {
-
-        Err(format!("HTTP error: {}", response.status()).into())
+        Err(CustomJsonRpcError::HttpError(response.status()).into())
     }
-    
-
-   
 }
-
 pub async fn export_to_csv(filename: &str, headers: &[&str], records: &[Vec<String>]) -> Result<(), Box<dyn Error>> {
     info!("Exporting results to CSV file: {}", filename);
     let file = File::create(filename)?;

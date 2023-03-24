@@ -10,7 +10,7 @@ use reqwest::Client;
 use tokio::signal::unix::{SignalKind, signal};
 use std::error::Error;
 use std::fs::File;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, RwLock};
 use std::time::Instant;
 use std::sync::atomic::{AtomicU64, Ordering, AtomicBool};
 use tokio::time::{timeout, Duration};
@@ -64,12 +64,12 @@ pub async fn run() {
         vec![max_connections]
     };
     for connections in connections_range {
-        let stats = Arc::new(Mutex::new(Stats::default()));
+        let stats = Arc::new(RwLock::new(Stats::default()));
         let mut handles = Vec::new();
         let start_time = Instant::now();
         let stop_flag = Arc::new(AtomicBool::new(false));
         let timeout_duration = Duration::from_millis(args.timeout);
-        let error_counts = Arc::new(Mutex::new(HashMap::new()));
+        let error_counts = Arc::new(RwLock::new(HashMap::new()));
         // Set up a signal handler for SIGINT and SIGTERM
         let mut sigint = signal(SignalKind::interrupt()).unwrap();
         let mut sigterm = signal(SignalKind::terminate()).unwrap();
@@ -101,7 +101,7 @@ pub async fn run() {
             if stop_flag_clone.load(Ordering::SeqCst) {
                 break;
             }
-            let error_counts_clone = error_counts.clone();
+            let error_counts = error_counts.clone();
             let handle = tokio::spawn(async move {
                 let mut request_count = 0;
                 let test_start_time = Instant::now();
@@ -118,7 +118,7 @@ pub async fn run() {
                         Ok(res) => res,
                         Err(_) => {
                             // Update the timeout_requests counter
-                            let mut stats = stats.lock().unwrap();
+                            let mut stats = stats.write().unwrap();
                             stats.timeout_requests += 1;
                     
                             Err("Request timed out".into())
@@ -126,7 +126,7 @@ pub async fn run() {
                     };
                     let elapsed_time = start_time.elapsed().as_millis();
     
-                    let mut stats = stats.lock().unwrap();
+                    let mut stats = stats.write().unwrap();
                     stats.completed_requests.fetch_add(1, Ordering::Relaxed);
                     progress_bar.inc(1);
                     match result {
@@ -138,13 +138,13 @@ pub async fn run() {
                         Err(e) => {
                             stats.failed_requests += 1;
                             {
-                                let mut error_counts = error_counts_clone.lock().unwrap();
+                                let mut error_counts = error_counts.write().unwrap();
                                 let count = error_counts.entry(e.to_string()).or_insert(0);
                                 *count += 1;
                                 // progress_bar.println(format!("{}({})", e,count));
                                 //print!("{}({})", e,count);
                             }
-                            error!("Request failed with error: {}", e);
+                            //error!("Request failed with error: {}", e);
                         }
                     }
                     
@@ -173,7 +173,7 @@ pub async fn run() {
 
         // Display the results
         
-        let stats = stats.lock().unwrap();
+        let mut stats = stats.write().unwrap();
         let total_requests = stats.completed_requests.load(Ordering::Relaxed);
         let average_response_time = if total_requests > 0 {
             stats.total_response_time / total_requests as u128
@@ -196,7 +196,7 @@ pub async fn run() {
         println!("{:=<50}", "");
         
         println!("\nError counts:");
-        let error_counts = error_counts.lock().unwrap();
+        let mut error_counts = error_counts.write().unwrap();
         for (error, count) in error_counts.iter() {
             println!("{}: {}", error, count);
         }
