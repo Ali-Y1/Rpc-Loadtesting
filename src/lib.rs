@@ -18,6 +18,7 @@ use log::{debug, info, error};
 use chrono::prelude::*;
 use indicatif::{ProgressBar, ProgressStyle};
 use std::collections::HashMap;
+use rand::prelude::*;
 use crate::utils::*;
 
 pub mod utils;
@@ -30,6 +31,7 @@ pub async fn run() {
     let connections_step = args.connections_step;
     let request_file = &args.request_file;
     let start_time = Utc::now();
+    let server_urls = args.server_urls;
     info!("Started test at {}", start_time);
 
     // Read the JSON request from the file
@@ -91,7 +93,7 @@ pub async fn run() {
             let progress_bar = progress_bar.clone();
             let client = client.clone();
             let stats = stats.clone();
-            let server_url = args.server_url.to_owned();
+            let server_urls = server_urls.clone();
             let test_duration = args.test_duration;
             let stop_flag_clone = stop_flag.clone();
             let json_request_clone = json_request.clone();
@@ -107,7 +109,10 @@ pub async fn run() {
                     && (args.requests_per_connection == 0 || request_count < args.requests_per_connection)
                 {
                     let request = json_request_clone.clone();
-
+                    let server_url = {
+                        let mut rng = thread_rng();
+                        server_urls.choose(&mut rng).unwrap().to_owned()
+                    };
                     let start_time = Instant::now();
                     let result = match timeout(timeout_duration, send_json_rpc_request(&client, &server_url, &request)).await {
                         Ok(res) => res,

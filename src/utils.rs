@@ -53,8 +53,8 @@ pub struct Stats {
 pub struct Cli {
     #[structopt(short = "t", long = "timeout", default_value = "15000", help = "Request timeout in milliseconds")]
     pub timeout: u64,
-    #[structopt(short = "u", long = "url", help = "URL of the JSON-RPC server to test")]
-    pub server_url: String,
+    #[structopt(short = "u", long = "url", required = true, help = "List of server URLs separated by commas")]
+    pub server_urls: Vec<String>,
     #[structopt(short = "c", long = "connections", help = "Number of concurrent connections to establish")]
     pub concurrent_connections: u32,
     #[structopt(short = "r", long = "requests", default_value = "0", help = "Number of requests per connection (0 for time-based test)")]
