@@ -16,7 +16,7 @@ use std::time::Instant;
 use std::sync::atomic::{AtomicU64, Ordering, AtomicBool};
 use tokio::time::{timeout, Duration};
 use std::path::PathBuf;
-use std::fs;
+use std::{fs, fmt};
 
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -53,8 +53,8 @@ pub struct Stats {
 pub struct Cli {
     #[structopt(short = "t", long = "timeout", default_value = "15000", help = "Request timeout in milliseconds")]
     pub timeout: u64,
-    #[structopt(short = "u", long = "url", help = "URL of the JSON-RPC server to test")]
-    pub server_url: String,
+    #[structopt(short = "u", long = "url", required = true, help = "List of server URLs separated by commas")]
+    pub server_urls: Vec<String>,
     #[structopt(short = "c", long = "connections", help = "Number of concurrent connections to establish")]
     pub concurrent_connections: u32,
     #[structopt(short = "r", long = "requests", default_value = "0", help = "Number of requests per connection (0 for time-based test)")]
@@ -78,33 +78,46 @@ pub async fn read_json_request_from_file(file_path: &PathBuf) -> Result<JsonRequ
     Ok(json_request)
 }
 
+#[derive(Debug)]
+enum CustomJsonRpcError {
+    HttpError(reqwest::StatusCode),
+    JsonRpcError(JsonResponse),
+}
+
+impl fmt::Display for CustomJsonRpcError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            CustomJsonRpcError::HttpError(status) => write!(f, "HTTP error: {}", status),
+            CustomJsonRpcError::JsonRpcError(response) => write!(f, "JSON-RPC error: {:?}", response),
+        }
+    }
+}
+
+impl Error for CustomJsonRpcError {}
+
 pub async fn send_json_rpc_request(
     client: &Client,
     server_url: &str,
     request: &JsonRequest,
-) -> Result<JsonResponse, Box<dyn Error>> {
+) -> Result<(), Box<dyn Error>> {
     debug!("Sending JSON-RPC request: {:?}", request);
     let response = client.post(server_url)
         .json(request)
         .send()
         .await?;
-    debug!("Received response: {:?}", response);
+
     if response.status().is_success() {
-        if response.content_length().unwrap_or_else(||1000) < 1000{
-            return Err(format!("{:?}",response).into());
+        let content_length = response.content_length().unwrap_or(1000);
+        if content_length < 1000 {
+            let json_response: JsonResponse = response.json().await?;
+            return Err(CustomJsonRpcError::JsonRpcError(json_response).into());
+            // return Ok(())
         }
-        let json_response: JsonResponse = response.json().await?;
-        debug!("Parsed JSON-RPC response: {:?}", json_response);
-        Ok(json_response)
+        Ok(())
     } else {
-        error!("HTTP error: {}", response.status());
-        Err(format!("HTTP error: {}", response.status()).into())
+        Err(CustomJsonRpcError::HttpError(response.status()).into())
     }
-    
-
-   
 }
-
 pub async fn export_to_csv(filename: &str, headers: &[&str], records: &[Vec<String>]) -> Result<(), Box<dyn Error>> {
     info!("Exporting results to CSV file: {}", filename);
     let file = File::create(filename)?;

@@ -1,2 +1,2 @@
 connections,total_requests,successful_requests,failed_requests,average_response_time,average_requests_per_second,elapsed_time,timeout_requests
-1,50,50,0,236,4.19,11.92,0
+10,100,100,0,124,66.00,1.52,0
