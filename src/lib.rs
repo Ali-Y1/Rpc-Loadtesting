@@ -10,7 +10,7 @@ use reqwest::Client;
 use tokio::signal::unix::{SignalKind, signal};
 use std::error::Error;
 use std::fs::File;
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, RwLock, mpsc};
 use std::time::Instant;
 use std::sync::atomic::{AtomicU64, Ordering, AtomicBool};
 use tokio::time::{timeout, Duration};
@@ -24,7 +24,7 @@ use crate::utils::*;
 pub mod utils;
 
 
-pub async fn run() {
+pub async fn run(rx: Option<mpsc::Receiver<JsonRequest>> , stop_flag: Option<Arc<AtomicBool>>) {
     let args = Cli::from_args();
     let client = Arc::new(Client::new());
     let max_connections = args.concurrent_connections;
@@ -35,15 +35,19 @@ pub async fn run() {
     info!("Started test at {}", start_time);
 
     // Read the JSON request from the file
-    let json_request = match read_json_request_from_file(request_file).await {
-        Ok(req) => {
-        info!("Successfully read JSON request from file");
-        req
-    },
-        Err(e) => {
-            error!("Error reading JSON request from file: {}", e);
-            return;
-        }
+    let file_request = if rx.is_none() {
+        Some(match read_json_request_from_file(request_file).await {
+            Ok(req) => {
+                info!("Successfully read JSON request from file");
+                req
+            },
+            Err(e) => {
+                error!("Error reading JSON request from file: {}", e);
+                return;
+            }
+        })
+    } else {
+        None
     };
 
     let headers = &[
@@ -96,7 +100,11 @@ pub async fn run() {
             let server_urls = server_urls.clone();
             let test_duration = args.test_duration;
             let stop_flag_clone = stop_flag.clone();
-            let json_request_clone = json_request.clone();
+            let json_request_clone = if let Some(receiver) = rx.as_ref() {
+                receiver.recv().expect("Failed to receive JsonRequest from channel")
+            } else {
+                file_request.clone().expect("File request should be available")
+            };
 
             if stop_flag_clone.load(Ordering::SeqCst) {
                 break;
@@ -234,4 +242,7 @@ pub async fn run() {
      wtr.flush().unwrap();
  
      info!("Results exported to {}", file_path);
+     if stop_flag.is_some() {
+     stop_flag.unwrap().store(true, Ordering::SeqCst);
+     }
  }

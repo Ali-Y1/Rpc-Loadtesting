@@ -1,11 +1,1 @@
-{
-    "method": "eth_getLogs",
-    "params": [
-        {
-            "fromBlock": "latest",
-            "toBlock": "latest"
-        }
-    ],
-    "id": 1,
-    "jsonrpc": "2.0"
-}
+{"method": "eth_getLogs","params": [{"fromBlock": "latest","toBlock": "latest"}],"id": 1,"jsonrpc": "2.0"}

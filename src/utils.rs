@@ -11,12 +11,13 @@ use reqwest::Client;
 use tokio::signal::unix::{SignalKind, signal};
 use std::error::Error;
 use std::fs::File;
-use std::sync::{Arc, Mutex};
+use std::io::BufRead;
+use std::sync::{Arc, Mutex, mpsc};
 use std::time::Instant;
 use std::sync::atomic::{AtomicU64, Ordering, AtomicBool};
 use tokio::time::{timeout, Duration};
 use std::path::PathBuf;
-use std::{fs, fmt};
+use std::{fs, fmt, io};
 
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -69,6 +70,8 @@ pub struct Cli {
     pub output_filename: String,
     #[structopt(short = "v", long = "verbose", parse(from_occurrences), help = "Increase output verbosity")]
     pub verbosity: u8,
+    #[structopt(short = "p", long = "pipe", help = "Take requests from stdin")]
+    pub pipe: bool,
 }
 
 pub async fn read_json_request_from_file(file_path: &PathBuf) -> Result<JsonRequest, Box<dyn Error>> {
@@ -131,4 +134,26 @@ pub async fn export_to_csv(filename: &str, headers: &[&str], records: &[Vec<Stri
     info!("Flushing the writer and finalizing the CSV file");
     writer.flush()?;
     Ok(())
+}
+
+pub async fn process_ethspam_output(tx: mpsc::Sender<JsonRequest>, stop_flag: Arc<AtomicBool>) {
+    let stdin = io::stdin();
+    for line in stdin.lock().lines() {
+        if stop_flag.load(Ordering::SeqCst) {
+            break;
+        }
+
+        let line = line.unwrap();
+        let json_request: serde_json::Result<JsonRequest> = serde_json::from_str(&line);
+
+        match json_request {
+            Ok(request) => {
+                // Send the JsonRequest to the channel
+                tx.send(request).unwrap();
+            }
+            Err(e) => {
+                eprintln!("Error parsing JSON RPC request: {}", e);
+            }
+        }
+    }
 }
